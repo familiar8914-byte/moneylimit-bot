@@ -1,4 +1,11 @@
-from storage import get_user, save_user
+from storage import (
+    get_user,
+    save_user,
+    get_stat,
+    inc_stat,
+    mark_daily_activity
+)
+from storage import get_dau
 
 import asyncio
 from datetime import date
@@ -15,13 +22,16 @@ from aiogram.fsm.context import FSMContext
 load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 
 print(f"Token: {BOT_TOKEN[:10] if BOT_TOKEN else 'NOT LOADED'}...")
+
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
 # -----------------------------
+
 
 
 # -----------------------------
@@ -92,6 +102,9 @@ def get_today_text(user_id: int) -> str:
 # -----------------------------
 @dp.message(CommandStart())
 async def start(message: Message, state: FSMContext):
+    inc_stat("starts")
+    mark_daily_activity(message.from_user.id)
+
     await state.clear()
     await message.answer(
         "Этот бот показывает,\n"
@@ -99,6 +112,7 @@ async def start(message: Message, state: FSMContext):
         "чтобы не остаться без денег в конце месяца.",
         reply_markup=start_kb
     )
+
 
 # -----------------------------
 # Начать
@@ -157,6 +171,7 @@ async def set_days(message: Message, state: FSMContext):
 # -----------------------------
 @dp.message(F.text == "Сегодня")
 async def today(message: Message):
+    mark_daily_activity(message.from_user.id)
     user_id = message.from_user.id
     
     user = get_user(user_id)
@@ -193,6 +208,9 @@ async def spent_amount(message: Message, state: FSMContext):
     spent = int(message.text)
     if spent <= 0:
         return
+    
+    inc_stat("spent_actions")
+    mark_daily_activity(message.from_user.id)
 
      # фиксируем трату СЕГОДНЯ
     user["today_spent"] += spent
@@ -221,7 +239,24 @@ async def reset(message: Message, state: FSMContext):
     await state.set_state(Setup.monthly_amount)
     await message.answer("Сколько денег у тебя есть на месяц?")
 
-# -----------------------------
+
+@dp.message(F.text == "/stats")
+async def stats_cmd(message: Message):
+    if message.from_user.id != ADMIN_ID:
+        return
+
+    starts = get_stat("starts")
+    spent = get_stat("spent_actions")
+
+    dau = get_dau()
+
+    await message.answer(
+        f"📊 Статистика:\n"
+        f"▶️ Запусков: {starts}\n"
+        f"💸 Трат: {spent}\n"
+        f"👤 DAU сегодня: {dau}"
+    )
+# -------- ---------------------
 # Запуск
 # -----------------------------
 async def main():
