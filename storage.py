@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS users (
     days_left INTEGER NOT NULL,
     daily_limit INTEGER NOT NULL,
     today_spent INTEGER NOT NULL,
-    last_date TEXT NOT NULL
+    last_date TEXT NOT NULL,
+    paid_until TEXT
 )
 """)
 
@@ -34,7 +35,7 @@ CREATE TABLE IF NOT EXISTS daily_activity (
 """)
 
 # init counters
-for key in ("starts", "spent_actions"):
+for key in ("starts", "spent_actions", "pay_clicks", "payments"):
     cursor.execute(
         "INSERT OR IGNORE INTO stats (key, value) VALUES (?, 0)",
         (key,)
@@ -48,6 +49,7 @@ def get_user(user_id: int):
     row = cursor.fetchone()
     if not row:
         return None
+
     return {
         "user_id": row[0],
         "money_left": row[1],
@@ -55,21 +57,23 @@ def get_user(user_id: int):
         "daily_limit": row[3],
         "today_spent": row[4],
         "last_date": date.fromisoformat(row[5]),
+        "paid_until": date.fromisoformat(row[6]) if row[6] else None,
     }
 
 
 def save_user(user_id: int, data: dict):
     cursor.execute("""
     INSERT OR REPLACE INTO users
-    (user_id, money_left, days_left, daily_limit, today_spent, last_date)
-    VALUES (?, ?, ?, ?, ?, ?)
+    (user_id, money_left, days_left, daily_limit, today_spent, last_date, paid_until)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
     """, (
         user_id,
         data["money_left"],
         data["days_left"],
         data["daily_limit"],
         data["today_spent"],
-        data["last_date"].isoformat()
+        data["last_date"].isoformat(),
+        data["paid_until"].isoformat() if data.get("paid_until") else None
     ))
     conn.commit()
 
